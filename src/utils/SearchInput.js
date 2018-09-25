@@ -30,6 +30,7 @@ export default class SearchInput extends React.Component {
   }
   onSearch = () => {
     //$('#dropdownMenuButton').dropdown("toggle");
+<<<<<<< HEAD
     this.props.search();
     console.log("search...");
   }
@@ -39,6 +40,16 @@ export default class SearchInput extends React.Component {
   }
 
 
+=======
+    let {searchText} = this.state;
+    this.props.search(searchText);
+  }
+  onPressEnter = () => {
+    $('#dropdownMenuButton').dropdown("toggle");
+    this.onSearch();
+  }
+
+>>>>>>> transcan_api_replace
   render() {
     return (
         <span className="dropdown">

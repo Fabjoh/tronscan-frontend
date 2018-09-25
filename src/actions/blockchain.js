@@ -20,11 +20,11 @@ export const setBlocks = (blocks = []) => ({
 });
 
 export const loadBlocks = () => async (dispatch) => {
-  let {blocks} = await Client.getBlocks({
-    order: '-timestamp',
-    limit: 15,
-  });
-  dispatch(setBlocks(blocks));
+    let {blocks} = await Client.getBlocks({
+        order: '-timestamp',
+        limit: 15,
+    });
+    dispatch(setBlocks(blocks));
 };
 
 export const loadTransactions = () => async (dispatch) => {
