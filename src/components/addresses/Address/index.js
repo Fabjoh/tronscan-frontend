@@ -1,5 +1,6 @@
 /* eslint-disable no-undef */
 import React, {Fragment} from "react";
+import {injectIntl} from "react-intl";
 import {NavLink, Route, Switch} from "react-router-dom";
 import {Client} from "../../../services/api";
 import {tu} from "../../../utils/i18n";
@@ -9,13 +10,14 @@ import {ONE_TRX} from "../../../constants";
 import {AddressLink, ExternalLink} from "../../common/Links";
 import {TRXPrice} from "../../common/Price";
 import {TronLoader} from "../../common/loaders";
-import Blocks from "./Blocks";
 import Transactions from "../../common/Transactions";
 import Votes from "../../common/Votes";
 import Transfers from "../../common/Transfers";
 import PieReact from "../../common/PieChart";
 import xhr from "axios/index";
 import {sortBy} from "lodash";
+import Blocks from "../../common/Blocks";
+import {channel} from "../../../services/api";
 
 class Address extends React.Component {
 
@@ -29,6 +31,8 @@ class Address extends React.Component {
       loading: true,
       blocksProduced: 0,
       votes: null,
+      rank: 0,
+      totalVotes: 0,
       address: {
         address: "",
         balance: 0,
@@ -46,7 +50,7 @@ class Address extends React.Component {
           label: <span>{tu("transfers")}</span>,
           cmp: () => (
               <TronLoader>
-                Loading Transfers
+                {tu("loading_transfers")}
               </TronLoader>
           )
         },
@@ -57,7 +61,7 @@ class Address extends React.Component {
           label: <span>{tu("transactions")}</span>,
           cmp: () => (
               <TronLoader>
-                Loading Transactions
+                {tu("loading_transactions")}
               </TronLoader>
           )
         },
@@ -67,10 +71,8 @@ class Address extends React.Component {
 
   componentDidMount() {
     let {match} = this.props;
-
     this.loadAddress(match.params.id);
-    this.loadVotes(match.params.id);
-    this.loadWitness();
+    this.loadWitness(match.params.id);
   }
 
   componentDidUpdate(prevProps) {
@@ -82,7 +84,7 @@ class Address extends React.Component {
   }
 
   componentWillUnmount() {
-    // this.live && this.live.close();
+    this.live && this.live.close();
   }
 
   async loadVotes(address) {
@@ -90,33 +92,62 @@ class Address extends React.Component {
 
     let data = votes.data.data.slice(0, 10);
     let totalVotes = votes.data.totalVotes;
-    for (let d in data) {
-      data[d].name = data[d].voterAddress;
-      data[d].value = ((data[d].votes / totalVotes) * 100).toFixed(3);
+    for (let vote of data) {
+      vote.name = vote.voterAddress;
+      vote.value = ((vote.votes / totalVotes) * 100).toFixed(3);
     }
     this.setState({votes: data});
 
   }
 
   async loadMedia(address) {
-    let media = await Client.getAddressMedia(address);
-
-    if (media.success) {
-      this.setState({
-        media: {
-          image: media.image,
-        }
-      });
+    try {
+      let media = await Client.getAddressMedia(address);
+      if (media.success) {
+        this.setState({
+          media: {
+            image: media.image,
+          }
+        });
+      }
+    } catch (e) {
     }
   }
 
-  async loadAddress(id) {
 
+  async refreshAddress(id) {
+    let {intl} = this.props;
+    let address = await Client.getAddress(id);
+
+    if (address.representative.enabled) {
+      this.loadMedia(id);
+    }
+
+    this.setState(prevProps => ({
+      address,
+      tabs: {
+        ...prevProps.tabs,
+        token_balances: {
+          id: "token_balances",
+          icon: "fa fa-piggy-bank",
+          path: "/token-balances",
+          label: <span>{tu("token_balances")}</span>,
+          cmp: () => <TokenBalances tokenBalances={address.balances} intl={intl}/>,
+        },
+      }
+    }))
+  }
+
+  async loadAddress(id) {
+    let {intl} = this.props;
     this.setState({loading: true, address: {address: id}, media: null,});
 
+    // this.live && this.live.close();
     // this.live = channel("/address-" + id);
     // this.live.on('transfer', transaction => {
-    //   console.log("NEW TRANSACTION!", transaction);
+    //   setTimeout(() => {
+    //     this.refreshAddress(id);
+    //   }, 1500);
     // });
 
     let address = await Client.getAddress(id);
@@ -127,7 +158,7 @@ class Address extends React.Component {
 
     let stats = await Client.getAddressStats(id);
 
-    let {blocks, total} = await Client.getBlocks({
+    let {total: totalProducedBlocks} = await Client.getBlocks({
       producer: id,
       limit: 1,
     });
@@ -135,51 +166,52 @@ class Address extends React.Component {
     this.setState(prevProps => ({
       loading: false,
       address,
-      blocksProduced: total,
+      blocksProduced: totalProducedBlocks,
       stats,
       tabs: {
         ...prevProps.tabs,
         transfers: {
           id: "transfers",
-          icon: "fa fa-exchange-alt",
+          // icon: "fa fa-exchange-alt",
           path: "",
           label: <span>{tu("transfers")}</span>,
           cmp: () => <Transfers filter={{address: id}}/>
         },
         transactions: {
           id: "transactions",
-          icon: "fas fa-handshake",
+          // icon: "fas fa-handshake",
           path: "/transactions",
           label: <span>{tu("transactions")}</span>,
           cmp: () => <Transactions filter={{address: id}}/>
         },
         token_balances: {
           id: "token_balances",
-          icon: "fa fa-piggy-bank",
+          // icon: "fa fa-piggy-bank",
           path: "/token-balances",
           label: <span>{tu("token_balances")}</span>,
-          cmp: () => <TokenBalances tokenBalances={address.balances}/>,
+          cmp: () => <TokenBalances tokenBalances={address.balances} intl={intl}/>,
         },
         blocks_produced: {
           id: "blocks-produced",
-          icon: "fa fa-cube",
+          // icon: "fa fa-cube",
           path: "/blocks",
           label: <span>{tu("produced_blocks")}</span>,
-          cmp: () => <Blocks blocks={blocks}/>,
+          cmp: () => <Blocks filter={{producer: id}} intl={intl}/>,
         },
         votes: {
           id: "votes",
-          icon: "fa fa-bullhorn",
+          // icon: "fa fa-bullhorn",
           path: "/votes",
           label: <span>{tu("votes")}</span>,
           cmp: () => <Votes
               filter={{voter: id}}
               showVoter={false}
+              showVoterPercentage={false}
           />,
         },
         voters: {
           id: "voters",
-          icon: "fa fa-bullhorn",
+          // icon: "fa fa-bullhorn",
           path: "/voters",
           label: <span>{tu("voters")}</span>,
           cmp: () => <Votes
@@ -191,49 +223,30 @@ class Address extends React.Component {
     }));
   }
 
-  async loadWitness() {
-    let {witnesses} = await Client.getWitnesses();
-    let votes = await Client.getLiveVotes();
-
-    let candidates = witnesses.map(c => ({
-      ...c,
-      votes: 0,
-    }));
-    candidates = candidates.map(c => ({
-      ...c,
-      votes: (votes[c.address] ? votes[c.address].votes : 0),
-    }));
-
-    let newCandidates = sortBy(candidates, c => c.votes * -1).map((c, index) => ({
-      ...c,
-      rank: index + 1,
-    }));
-
+  async loadWitness(id) {
+    /* 需要总票数，实时排名俩个参数*/
+    let {data} = await Client.getVoteWitness(id)
     this.setState({
-      candidates: newCandidates
+      totalVotes: data.realTimeVotes,
+      rank: data.realTimeRanking
     });
-
   }
 
   render() {
 
-    let {address, tabs, stats, loading, blocksProduced, media, votes, candidates} = this.state;
+    let {address, tabs, stats, loading, blocksProduced, media, candidates, rank ,totalVotes} = this.state;
     let {match} = this.props;
-    let rank;
-    let totalVotes;
-    let producer;
-    for (let can in candidates) {
-      if (address.address === candidates[can].address) {
-        rank = candidates[can].rank;
-        totalVotes = candidates[can].votes;
-        producer = candidates[can].producer;
-      }
-    }
+    let uploadURL = "https://server.tron.network/api/v2/node/info_upload?address=" + match.params.id
 
     if (!address) {
       return null;
     }
-
+    let pathname = this.props.location.pathname;
+    let tabName = ''
+    let rex = /[a-zA-Z0-9]{34}\/?([a-zA-Z\\-]+)$/
+    pathname.replace(rex, function (a, b) {
+      tabName = b
+    })
     return (
         <main className="container header-overlap">
           <div className="row">
@@ -245,33 +258,24 @@ class Address extends React.Component {
                       </TronLoader>
                     </div> :
                     <Fragment>
-                      <div className="card">
+                      <div className="card list-style-header">
                         {
-                          address.representative.enabled && !producer &&
-                          <div className="card-header text-center bg-info font-weight-bold text-white">
-                            {tu("representatives")}
-                          </div>
-                        }
-                        {
-                          address.representative.enabled && producer &&
-                          <div className="card-header text-center bg-danger font-weight-bold text-white">
-                            {tu("representatives")}
-                          </div>
-                        }
-                        {
-                          media &&
+                          address.representative.enabled &&
                           <div className="card-body">
-                            <div className="text-center">
-                              <img style={{maxWidth: '100%'}} src={media.image}/>
-                            </div>
+                            <h5 className="card-title m-0">
+                              <i className="fa fa-cube mr-2"/>
+                              {tu("representatives")}
+                            </h5>
                           </div>
                         }
                         <div className="row">
-                          <div className={address.representative.enabled ? 'col-md-6 mt-3 mt-md-0' : 'col-md-12'}>
+
+                          <div className="col-md-12">
+
                             <table className="table m-0">
                               <tbody>
                               {
-                                rank &&
+                                Boolean(rank) &&
                                 <tr>
                                   <th>{tu("rank_real_time")}:</th>
                                   <td>
@@ -336,13 +340,26 @@ class Address extends React.Component {
                                 <td>
                                   <ul className="list-unstyled m-0">
                                     <li>
-                                      <FormattedNumber value={address.frozen.total / ONE_TRX}/>
+                                      <TRXPrice showCurreny={false} amount={address.frozen.total / ONE_TRX}/>
+                                    </li>
+                                  </ul>
+                                </td>
+                              </tr>
+                              <tr>
+                                <th>{tu("total_balance")}:</th>
+                                <td>
+                                  <ul className="list-unstyled m-0">
+                                    <li>
+                                      <TRXPrice amount={(address.balance + address.frozen.total) / ONE_TRX}/>{' '}
+                                      <span className="small">(<TRXPrice
+                                          amount={(address.balance + address.frozen.total) / ONE_TRX} currency="USD"
+                                          showPopup={false}/>)</span>
                                     </li>
                                   </ul>
                                 </td>
                               </tr>
                               {
-                                totalVotes &&
+                                Boolean(totalVotes) &&
                                 <tr>
                                   <th>{tu("total_votes")}:</th>
                                   <td>
@@ -356,20 +373,26 @@ class Address extends React.Component {
                               }
                               </tbody>
                             </table>
+
                           </div>
-                          <div className={address.representative.enabled ? 'col-md-6 mt-3 mt-md-0' : ''}>
-                            {
-                              address.representative.enabled &&
+                          {
+                            /*
+                            <div className={address.representative.enabled ? 'col-md-6 mt-3 mt-md-0' : ''}>
+                              {
+                              address.representative.enabled && votes.length &&
                               <h4 className="text-center mt-3">Top {votes.length} {tu("voters")} {tu("addresses")}</h4>
                             }
-                            {address.representative.enabled &&
+                              {
+                              address.representative.enabled &&
                             <PieReact style={{height: 340}} data={votes}/>
                             }
-                          </div>
+                            </div>
+                           */
+                          }
                         </div>
                       </div>
-                      <div className="card mt-3">
-                        <div className="card-header">
+                      <div className="card mt-3 list-style-body">
+                        <div className="card-header list-style-body__header">
                           <ul className="nav nav-tabs card-header-tabs">
                             {
                               Object.values(tabs).map(tab => (
@@ -383,7 +406,7 @@ class Address extends React.Component {
                             }
                           </ul>
                         </div>
-                        <div className="card-body p-0">
+                        <div className="card-body p-0 list-style-body__body">
                           <Switch>
                             {
                               Object.values(tabs).map(tab => (
@@ -393,7 +416,16 @@ class Address extends React.Component {
                             }
                           </Switch>
                         </div>
+
                       </div>
+                      {
+                        tabName === '' ?
+                            <div style={{marginTop: 20, float: 'right'}}><i size="1" style={{fontStyle: 'normal'}}>[
+                              Download <a href={uploadURL} style={{color: '#C23631'}}><b>CSV Export</b></a>&nbsp;<span
+                                  className="glyphicon glyphicon-download-alt"></span> ]</i>&nbsp;
+                            </div> : null
+                      }
+
                     </Fragment>
               }
             </div>
@@ -404,12 +436,10 @@ class Address extends React.Component {
 }
 
 function mapStateToProps(state) {
-
-
   return {};
 }
 
 const mapDispatchToProps = {};
 
 // export default connect(mapStateToProps, mapDispatchToProps)(Address);
-export default Address;
+export default injectIntl(Address);

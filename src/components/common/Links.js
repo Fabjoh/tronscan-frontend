@@ -15,10 +15,15 @@ export const WitnessLink = ({address}) => (
     <Link to={`/witness/${address}`}>{address}</Link>
 );
 
-export const TokenLink = ({name, ...props}) => (
-    <Link to={`/token/${encodeURI(name)}`} {...props}>{name}</Link>
-);
+export const TokenLink = ({name, namePlus, address, children, ...props}) => {
 
+  if (name && !namePlus) {
+    return <Link to={`/token/${encodeURI(name)}/${encodeURI(address)}`} {...props}>{children || name}</Link>
+  }
+  if (namePlus && name) {
+    return <Link to={`/token/${encodeURI(name)}/${encodeURI(address)}`} {...props}>{children || namePlus}</Link>
+  }
+};
 
 export class AddressLink extends React.PureComponent {
 
@@ -113,23 +118,13 @@ export class AddressLink extends React.PureComponent {
 
     let wrap = (
         <Fragment>
-          {
-            !isContract ?
-              <Link
-                  to={`/address/${address}`}
-                  style={style}
-                  className={"address-link text-nowrap " + className}
-                  {...props}>
-                {children ? children : address}
-              </Link> :
-              <Link
-                  to={`/contract/${address}`}
-                  style={style}
-                  className={"address-link text-nowrap " + className}
-                  {...props}>
-                {children ? children : address}
-              </Link>
-          }
+          <Link
+              to={`/address/${address}`}
+              style={style}
+              className={"address-link text-nowrap " + className}
+              {...props}>
+            {children ? children : address}
+          </Link>
           {
             includeCopy &&
             <CopyText text={address} className="ml-1"/>
@@ -177,7 +172,7 @@ export class ExternalLink extends React.PureComponent {
   };
 
   renderExternalLink() {
-    let {url} = this.props;
+    let {url, _url} = this.props;
 
     let urlHandler = App.getExternalLinkHandler();
     if (urlHandler) {
@@ -191,6 +186,10 @@ export class ExternalLink extends React.PureComponent {
              target="_blank">{tu("continue_to_external_website")}</a>
       );
     } else {
+      if (_url)
+        url = _url;
+      if (url.toLowerCase().indexOf("http://") < 0 && url.toLowerCase().indexOf("https://") < 0)
+        url = "http://" + url;
       return (
           <a className="btn btn-primary"
              href={url}
@@ -270,7 +269,7 @@ export const BlockHashLink = ({hash}) => (
 );
 
 export const TransactionHashLink = ({hash, children}) => (
-    <Link to={`/transaction/${hash}`}>{children}</Link>
+    <Link className="color-tron-100 list-item-word" to={`/transaction/${hash}`}>{children}</Link>
 );
 
 export const BlockNumberLink = ({number, children = null}) => {
